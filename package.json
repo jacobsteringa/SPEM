@@ -1,0 +1,29 @@
+{
+  "name": "spem",
+  "version": "0.0.1",
+  "description": "A Simpe Password Entropy Meter using zxcvbn.",
+  "main": "spem.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jacobsteringa/SPEM.git"
+  },
+  "keywords": [
+    "zxcvbn",
+    "bootstrap",
+    "password",
+    "entropy",
+    "strength"
+  ],
+  "author": "Jacob Steringa <jacobsteringa@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jacobsteringa/SPEM/issues"
+  },
+  "homepage": "https://github.com/jacobsteringa/SPEM#readme",
+  "dependencies": {
+    "zxcvbn": "^4.2.0"
+  }
+}
