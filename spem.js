@@ -4,30 +4,34 @@
     } else if (typeof module === 'object' && module.exports) {
         module.exports = factory(true);
     } else {
-        root.spem = factory();
+        root.Spem = factory();
     }
 }(this, function (isNode) {
 
-    var spem = function(options, loader, onUpdate) {
-        var oldOptions = options;
+    var Spem = function(options, loader, onUpdate) {
+        var oldOptions = options
 
         if (typeof options === 'string') {
             options = {
                 input: oldOptions
             };
 
+            if (typeof loader === 'undefined') {
+                return;
+            }
+
             if (typeof onUpdate === 'undefined') {
                 options.onUpdate = loader;
-
-                init(options);
-
-                return;
             } else {
                 options.onUpdate = onUpdate;
             }
         }
 
-        defer(options, loader);
+        var spem = initialize(options);
+
+        if (loader) return defer(spem, loader);
+
+        return spem.start();
     };
 
     /**
@@ -35,82 +39,108 @@
      *
      * This method requires the zxcvbn to be loaded.
      */
-    var init = function(options) {
-        var $input, $output;
-
-        if (typeof options.input === 'string') {
-            $input = document.querySelector(options.input);
-        } else if (options.input instanceof Node) {
-            $input = options.input;
-        } else {
-            throw new Error('input should be a Node or a selector');
-        }
-
-        if (typeof options.output === 'string') {
-            $output = document.querySelector(options.output);
-        } else if (options.output instanceof Node) {
-            $output = options.output;
-        }
-
-        var bsVersion = options.bsVersion || 3;
+    var initialize = function(options) {
+        var $input = getInputElement(options.input);
+        var $output = getElement(options.output);
+        var formatting = options.formatting || 'bs3';
 
         if ($output) {
-            var $progress = createProgressBar(bsVersion);
+            var $progress = createProgressBar(formatting, options.minWidth);
             var $progressBar = $progress.querySelector('div');
 
             $output.appendChild($progress);
         }
 
-        var updateStrengthMeter = function(value) {
-            var result = zxcvbn(value);
-
+        var updateStrengthMeter = function(result) {
             if ($output) {
                 $progressBar.style.width = '' + result.score * 25 + '%';
-                $progressBar.className = getProgressBarClass(bsVersion, result.score);
+                $progressBar.className = getProgressBarClass(formatting, result.score);
 
                 if (options.scoreMessages) {
                     $progressBar.innerHTML = options.scoreMessages[result.score];
                 }
             }
 
-            if (options.onUpdate) {
-                options.onUpdate(result);
-            }
-
-            if (options.onStart) {
-                options.onStart(result);
-
-                delete options.onStart;
-            }
+            if (options.onUpdate) options.onUpdate(result);
         };
 
         var onChange = function() {
-            updateStrengthMeter(this.value);
+            var result = zxcvbn(this.value);
+
+            updateStrengthMeter(result);
         };
 
-        $input.addEventListener('keyup', onChange);
-        $input.addEventListener('change', onChange);
+        var isDeferred = false;
 
-        updateStrengthMeter($input.value);
+        return {
+            defer: function() {
+                isDeferred = true;
+            },
+
+            start: function(deferred) {
+                if (isDeferred !== !!deferred) {
+                    return false;
+                }
+
+                $input.addEventListener('keyup', onChange);
+                $input.addEventListener('change', onChange);
+
+                var result = zxcvbn($input.value);
+
+                updateStrengthMeter(result);
+
+                if (options.onStart) options.onStart(result);
+
+                return this;
+            },
+
+            stop: function() {
+                isDeferred = false;
+            }
+        };
     };
 
-    var createProgressBar = function(version) {
+    var getInputElement = function(input) {
+        if (!input) throw new Error('No input element specified');
+
+        return getElement(input);
+    };
+
+    var getElement = function(selector) {
+        if (!selector) return false;
+
+        if (!(selector instanceof Node) && typeof selector !== 'string') {
+            throw new Error('Argument must be a selector or a DOM Node');
+        }
+
+        if (typeof selector === 'string') {
+            var el = document.querySelector(selector);
+
+            if (!el) throw new Error(selector + ' does not exist');
+
+            return el;
+        }
+
+        return selector;
+    };
+
+    var createProgressBar = function(formatting, minWidth) {
+        minWidth = minWidth || '48px';
+
         var progress = document.createElement('div');
         progress.className = 'progress';
         progress.innerHTML = [
-            '<div class="',
-            getProgressBarClass(version, 0),
-            'danger" role="progressbar"',
+            '<div class="' + getProgressBarClass(formatting, 0) + 'danger"',
+            'role="progressbar"',
             'aria-valuenow="0" aria-valuemin="0" aria-valuemax="4"',
-            'style="width: 0%; min-width: 48px">',
-            '</div>'
-        ].join('');
+            'style="width: 0%; min-width:' + minWidth + '"></div>'
+        ].join(' ');
 
         return progress;
     };
 
     var bootstrapClassMap = {
-        progressBar: { 2: 'bar', 3: 'progress-bar' },
+        progressBar: { 'bs2': 'bar', 'bs3': 'progress-bar' },
     };
 
     /**
@@ -118,10 +148,46 @@
      */
     var scoreClassMap = ['danger', 'danger', 'warning', 'info', 'success'];
 
-    var getProgressBarClass = function(version, score) {
-        var className = bootstrapClassMap.progressBar[version];
+    var getProgressBarClass = function(formatting, score) {
+        var className = bootstrapClassMap.progressBar[formatting];
 
         return className + ' ' + className + '-' + scoreClassMap[score];
+    };
+
+    /**
+     * Defer SPEM initialisation.
+     *
+     * This function can be used to wait for zxcvbn being loaded.
+     */
+    var defer = function(spem, loader) {
+        spem.defer();
+
+        if (isNode) {
+            require.ensure(['zxcvbn'], function(require) {
+                window.zxcvbn = require('zxcvbn');
+
+                spem.start(true);
+            });
+        } else {
+            if (typeof loader === 'string') {
+                loader = createInjectLoader(loader);
+            }
+
+            loader(function() {
+                spem.start(true);
+            });
+        }
+
+        return spem;
+    };
+
+    /**
+     * Creates a loader for defer which uses a dynamically injected script tag.
+     */
+    var createInjectLoader = function(src) {
+        return function(cb) {
+            injectZxcvbnScript(src, cb);
+        };
     };
 
     /**
@@ -149,37 +215,5 @@
         fst.parentNode.insertBefore(s, fst);
     };
 
-    /**
-     * Defer SPEM initialisation.
-     *
-     * This function can be used to wait for zxcvbn being loaded.
-     */
-    var defer = function(options, loader) {
-        if (isNode) {
-            require.ensure(['zxcvbn'], function(require) {
-                window.zxcvbn = require('zxcvbn');
-
-                init(options);
-            });
-        } else {
-            if (typeof loader === 'string') {
-                loader = createInjectLoader(loader);
-            }
-
-            loader(function() {
-                init(options);
-            });
-        }
-    };
-
-    /**
-     * Creates a loader for defer which uses a dynamically injected script tag.
-     */
-    var createInjectLoader = function(src) {
-        return function(callback) {
-            injectZxcvbnScript(src, callback);
-        };
-    };
-
-    return spem;
+    return Spem;
 }));
