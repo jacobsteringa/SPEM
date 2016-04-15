@@ -1,6 +1,6 @@
 {
   "name": "spem",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A Simpe Password Entropy Meter using zxcvbn.",
   "main": "spem.js",
   "scripts": {
