@@ -2,11 +2,33 @@
     if (typeof define === 'function' && define.amd) {
         define([], factory);
     } else if (typeof module === 'object' && module.exports) {
-        module.exports = factory();
+        module.exports = factory(true);
     } else {
-        root.SPEM = factory();
+        root.spem = factory();
     }
-}(this, function () {
+}(this, function (isNode) {
+
+    var spem = function(options, loader, onUpdate) {
+        var oldOptions = options;
+
+        if (typeof options === 'string') {
+            options = {
+                input: oldOptions
+            };
+
+            if (typeof onUpdate === 'undefined') {
+                options.onUpdate = loader;
+
+                init(options);
+
+                return;
+            } else {
+                options.onUpdate = onUpdate;
+            }
+        }
+
+        defer(options, loader);
+    };
 
     /**
      * Start the password entropy meter.
@@ -14,54 +36,71 @@
      * This method requires the zxcvbn to be loaded.
      */
     var init = function(options) {
-        var $passwordField, $outputContainer;
+        var $input, $output;
 
-        if (typeof options.passwordField === 'string') {
-            $passwordField = document.querySelector(options.passwordField);
-        } else if (options.passwordField instanceof Node) {
-            $passwordField = options.passwordField;
+        if (typeof options.input === 'string') {
+            $input = document.querySelector(options.input);
+        } else if (options.input instanceof Node) {
+            $input = options.input;
         } else {
-            throw new Error('passwordField should be a Node or a selector');
+            throw new Error('input should be a Node or a selector');
         }
 
-        if (typeof options.outputContainer === 'string') {
-            $outputContainer = document.querySelector(options.outputContainer);
-        } else if (options.outputContainer instanceof Node) {
-            $outputContainer = options.outputContainer;
-        } else {
-            throw new Error('outputContainer should be a Node or a selector');
+        if (typeof options.output === 'string') {
+            $output = document.querySelector(options.output);
+        } else if (options.output instanceof Node) {
+            $output = options.output;
         }
 
-        var $progress = createProgressBar();
-        var $progressBar = $progress.querySelector('.progress-bar');
+        var bsVersion = options.bsVersion || 3;
 
-        $outputContainer.appendChild($progress);
+        if ($output) {
+            var $progress = createProgressBar(bsVersion);
+            var $progressBar = $progress.querySelector('div');
+
+            $output.appendChild($progress);
+        }
 
         var updateStrengthMeter = function(value) {
             var result = zxcvbn(value);
 
-            $progressBar.style.width = '' + result.score * 25 + '%';
-            $progressBar.className = 'progress-bar progress-bar-' + scoreClassMap[result.score];
+            if ($output) {
+                $progressBar.style.width = '' + result.score * 25 + '%';
+                $progressBar.className = getProgressBarClass(bsVersion, result.score);
+
+                if (options.scoreMessages) {
+                    $progressBar.innerHTML = options.scoreMessages[result.score];
+                }
+            }
 
             if (options.onUpdate) {
                 options.onUpdate(result);
             }
+
+            if (options.onStart) {
+                options.onStart(result);
+
+                delete options.onStart;
+            }
         };
 
-        var onKeyup = function() {
+        var onChange = function() {
             updateStrengthMeter(this.value);
         };
-        
-        $passwordField.addEventListener('keyup', onKeyup);
 
-        updateStrengthMeter($passwordField.value);
+        $input.addEventListener('keyup', onChange);
+        $input.addEventListener('change', onChange);
+
+        updateStrengthMeter($input.value);
     };
 
-    var createProgressBar = function() {
+    var createProgressBar = function(version) {
         var progress = document.createElement('div');
         progress.className = 'progress';
         progress.innerHTML = [
-            '<div class="progress-bar progress-bar-danger" role="progressbar"',
+            '<div class="',
+            getProgressBarClass(version, 0),
+            'danger" role="progressbar"',
             'aria-valuenow="0" aria-valuemin="0" aria-valuemax="4"',
             'style="width: 0%; min-width: 48px">',
             '</div>'
@@ -70,10 +109,20 @@
         return progress;
     };
 
+    var bootstrapClassMap = {
+        progressBar: { 2: 'bar', 3: 'progress-bar' },
+    };
+
     /**
      * Holds bootstrap classes corresponding to zxcvbn score levels.
      */
     var scoreClassMap = ['danger', 'danger', 'warning', 'info', 'success'];
+
+    var getProgressBarClass = function(version, score) {
+        var className = bootstrapClassMap.progressBar[version];
+
+        return className + ' ' + className + '-' + scoreClassMap[score];
+    };
 
     /**
      * Dynamically injects zxcvbn script and executes callback when script is done loading.
@@ -106,23 +155,31 @@
      * This function can be used to wait for zxcvbn being loaded.
      */
     var defer = function(options, loader) {
-        loader(function() {
-            init(options);
-        });
+        if (isNode) {
+            require.ensure(['zxcvbn'], function(require) {
+                window.zxcvbn = require('zxcvbn');
+
+                init(options);
+            });
+        } else {
+            if (typeof loader === 'string') {
+                loader = createInjectLoader(loader);
+            }
+
+            loader(function() {
+                init(options);
+            });
+        }
     };
 
     /**
      * Creates a loader for defer which uses a dynamically injected script tag.
      */
-    var inject = function(src) {
+    var createInjectLoader = function(src) {
         return function(callback) {
             injectZxcvbnScript(src, callback);
         };
     };
 
-    return {
-        init: init,
-        defer: defer,
-        inject: inject,
-    };
+    return spem;
 }));
