@@ -42,6 +42,7 @@
     var initialize = function(options) {
         var $input = getInputElement(options.input);
         var $output = getElement(options.output);
+        var userData = getUserData(options.userData);
         var formatting = options.formatting || 'bs3';
 
         if ($output) {
@@ -65,7 +66,7 @@
         };
 
         var onChange = function() {
-            var result = zxcvbn(this.value);
+            var result = zxcvbn(this.value, userData);
 
             updateStrengthMeter(result);
         };
@@ -85,7 +86,7 @@
                 $input.addEventListener('keyup', onChange);
                 $input.addEventListener('change', onChange);
 
-                var result = zxcvbn($input.value);
+                var result = zxcvbn($input.value, userData);
 
                 updateStrengthMeter(result);
 
@@ -96,6 +97,14 @@
 
             stop: function() {
                 isDeferred = false;
+            },
+
+            updateUserData: function(data) {
+                userData = getUserData(data);
+
+                var result = zxcvbn($input.value, userData);
+
+                updateStrengthMeter(result);
             }
         };
     };
@@ -122,6 +131,32 @@
         }
 
         return selector;
+    };
+
+    var getUserData = function(userData) {
+        if (!userData) return [];
+
+        var row, dictionary = [], splitter = /( |\.|@)/;
+
+        for (var i = 0; i < userData.length; i++) {
+            row = userData[i];
+
+            dictionary.push(row);
+
+            if (splitter.test(row)) {
+                row = row.split(splitter);
+
+                dictionary = dictionary.concat(row);
+            } else {
+                dictionary.push(row);
+            }
+        }
+
+        return dictionary.reduce(function(prev, cur) {
+            if (prev.indexOf(cur) === -1) prev.push(cur);
+
+            return prev;
+        }, []);
     };
 
     var createProgressBar = function(formatting, minWidth) {
