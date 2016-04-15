@@ -13,7 +13,7 @@
      *
      * This method requires the zxcvbn to be loaded.
      */
-    var init = function(options, callback) {
+    var init = function(options) {
         var $passwordField, $outputContainer;
 
         if (typeof options.passwordField === 'string') {
@@ -43,8 +43,8 @@
             $progressBar.style.width = '' + result.score * 25 + '%';
             $progressBar.className = 'progress-bar progress-bar-' + scoreClassMap[result.score];
 
-            if (callback) {
-                callback(result);
+            if (options.onUpdate) {
+                options.onUpdate(result);
             }
         };
 
@@ -82,6 +82,10 @@
         var scriptId = 'zxcvbn-script';
 
         if (document.getElementById(scriptId)) {
+            if (window.zxcvbn) {
+                callback();
+            }
+
             return;
         }
 
@@ -101,9 +105,9 @@
      *
      * This function can be used to wait for zxcvbn being loaded.
      */
-    var defer = function(options, loader, callback) {
+    var defer = function(options, loader) {
         loader(function() {
-            init(options, callback);
+            init(options);
         });
     };
 
