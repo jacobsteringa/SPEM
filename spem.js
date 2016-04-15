@@ -8,14 +8,13 @@
     }
 }(this, function () {
 
-    var SPEM = function(options, callback) {
-        var $passwordField, $outputContainer, zxcvbnUrl;
-
-        zxcvbnUrl = options.zxcvbnUrl || 'https://dl.dropboxusercontent.com/u/209/zxcvbn/zxcvbn.js';
-
-        if (!options.passwordField || !options.outputContainer) {
-            throw new Error('passwordField and outputContainer are required options');
-        }
+    /**
+     * Start the password entropy meter.
+     *
+     * This method requires the zxcvbn to be loaded.
+     */
+    var init = function(options, callback) {
+        var $passwordField, $outputContainer;
 
         if (typeof options.passwordField === 'string') {
             $passwordField = document.querySelector(options.passwordField);
@@ -38,34 +37,48 @@
 
         $outputContainer.appendChild($progress);
 
-        var initStrengthMeter = function() {
-            var _this = this;
-
-            ensureZxcvbn(zxcvbnUrl, function() {
-                updateStrengthMeter(_this.value);
-
-                if (callback) callback();
-
-                $passwordField.addEventListener('keyup', function() {
-                    updateStrengthMeter(this.value);
-                });
-
-                $passwordField.removeEventListener('focus', initStrengthMeter);
-            });
-        };
-
         var updateStrengthMeter = function(value) {
             var result = zxcvbn(value);
 
             $progressBar.style.width = '' + result.score * 25 + '%';
-            $progressBar.className = 'progress-bar progress-bar-' + scoreMap[result.score].className;
-            $progressBar.innerHTML = scoreMap[result.score].message;
+            $progressBar.className = 'progress-bar progress-bar-' + scoreClassMap[result.score];
+
+            if (callback) {
+                callback(result);
+            }
         };
 
-        $passwordField.addEventListener('focus', initStrengthMeter);
+        var onKeyup = function() {
+            updateStrengthMeter(this.value);
+        };
+        
+        $passwordField.addEventListener('keyup', onKeyup);
+
+        updateStrengthMeter($passwordField.value);
     };
 
-    var ensureZxcvbn = function(src, callback) {
+    var createProgressBar = function() {
+        var progress = document.createElement('div');
+        progress.className = 'progress';
+        progress.innerHTML = [
+            '<div class="progress-bar progress-bar-danger" role="progressbar"',
+            'aria-valuenow="0" aria-valuemin="0" aria-valuemax="4"',
+            'style="width: 0%; min-width: 48px">',
+            '</div>'
+        ].join('');
+
+        return progress;
+    };
+
+    /**
+     * Holds bootstrap classes corresponding to zxcvbn score levels.
+     */
+    var scoreClassMap = ['danger', 'danger', 'warning', 'info', 'success'];
+
+    /**
+     * Dynamically injects zxcvbn script and executes callback when script is done loading.
+     */
+    var injectZxcvbnScript = function(src, callback) {
         var scriptId = 'zxcvbn-script';
 
         if (document.getElementById(scriptId)) {
@@ -83,35 +96,29 @@
         fst.parentNode.insertBefore(s, fst);
     };
 
-    var createProgressBar = function() {
-        var progress = document.createElement('div');
-        progress.className = 'progress';
-        progress.innerHTML = [
-            '<div class="progress-bar progress-bar-danger" role="progressbar"',
-            'aria-valuenow="0" aria-valuemin="0" aria-valuemax="4"',
-            'style="width: 0%; min-width: 48px">',
-            '</div>'
-        ].join('');
-
-        return progress;
+    /**
+     * Defer SPEM initialisation.
+     *
+     * This function can be used to wait for zxcvbn being loaded.
+     */
+    var defer = function(options, loader, callback) {
+        loader(function() {
+            init(options, callback);
+        });
     };
 
-    var scoreMap = [{
-        className: 'danger',
-        message: 'Zwak'
-    }, {
-        className: 'danger',
-        message: 'Zwak'
-    }, {
-        className: 'warning',
-        message: 'Middelmatig'
-    }, {
-        className: 'info',
-        message: 'Sterk'
-    }, {
-        className: 'success',
-        message: 'Zeer sterk'
-    }];
+    /**
+     * Creates a loader for defer which uses a dynamically injected script tag.
+     */
+    var inject = function(src) {
+        return function(callback) {
+            injectZxcvbnScript(src, callback);
+        };
+    };
 
-    return SPEM;
+    return {
+        init: init,
+        defer: defer,
+        inject: inject,
+    };
 }));
