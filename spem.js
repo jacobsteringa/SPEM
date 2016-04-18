@@ -1,7 +1,5 @@
 (function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define([], factory);
-    } else if (typeof module === 'object' && module.exports) {
+    if (typeof module === 'object' && module.exports) {
         module.exports = factory(function(cb) {
             require.ensure(['zxcvbn'], function(require) {
                 window.zxcvbn = require('zxcvbn');
@@ -9,6 +7,8 @@
                 cb();
             });
         });
+    } else if (typeof define === 'function' && define.amd) {
+        define([], factory);
     } else {
         root.Spem = factory();
     }
