@@ -2,14 +2,20 @@
     if (typeof define === 'function' && define.amd) {
         define([], factory);
     } else if (typeof module === 'object' && module.exports) {
-        module.exports = factory(true);
+        module.exports = factory(function(cb) {
+            require.ensure(['zxcvbn'], function(require) {
+                window.zxcvbn = require('zxcvbn');
+
+                cb();
+            });
+        });
     } else {
         root.Spem = factory();
     }
-}(this, function (isNode) {
+}(this, function (nodeLoader) {
 
     var Spem = function(options, loader, onUpdate) {
-        var oldOptions = options
+        var oldOptions = options;
 
         if (typeof options === 'string') {
             options = {
@@ -30,6 +36,8 @@
         var spem = initialize(options);
 
         if (loader) return defer(spem, loader);
+
+        if (nodeLoader) return defer(spem, nodeLoader);
 
         return spem.start();
     };
@@ -57,7 +65,7 @@
                 $progressBar.style.width = '' + result.score * 25 + '%';
                 $progressBar.className = getProgressBarClass(formatting, result.score);
 
-                if (options.scoreMessages) {
+                if (options.scoreMessages && formatting !== 'materialize') {
                     $progressBar.innerHTML = options.scoreMessages[result.score];
                 }
             }
@@ -165,7 +173,7 @@
         var progress = document.createElement('div');
         progress.className = 'progress';
         progress.innerHTML = [
-            '<div class="' + getProgressBarClass(formatting, 0) + 'danger"',
+            '<div class="' + getProgressBarClass(formatting, 0) + '"',
             'role="progressbar"',
             'aria-valuenow="0" aria-valuemin="0" aria-valuemax="4"',
             'style="width: 0%; min-width:' + minWidth + '"></div>'
@@ -174,8 +182,10 @@
         return progress;
     };
 
-    var bootstrapClassMap = {
-        progressBar: { 'bs2': 'bar', 'bs3': 'progress-bar' },
+    var progressBarClassMap = {
+        'bs2': 'bar',
+        'bs3': 'progress-bar',
+        'materialize': 'determinate',
     };
 
     /**
@@ -184,7 +194,11 @@
     var scoreClassMap = ['danger', 'danger', 'warning', 'info', 'success'];
 
     var getProgressBarClass = function(formatting, score) {
-        var className = bootstrapClassMap.progressBar[formatting];
+        var className = progressBarClassMap[formatting];
+
+        if (formatting === 'materialize') {
+            return className;
+        }
 
         return className + ' ' + className + '-' + scoreClassMap[score];
     };
@@ -197,21 +211,13 @@
     var defer = function(spem, loader) {
         spem.defer();
 
-        if (isNode) {
-            require.ensure(['zxcvbn'], function(require) {
-                window.zxcvbn = require('zxcvbn');
-
-                spem.start(true);
-            });
-        } else {
-            if (typeof loader === 'string') {
-                loader = createInjectLoader(loader);
-            }
-
-            loader(function() {
-                spem.start(true);
-            });
+        if (typeof loader === 'string') {
+            loader = createInjectLoader(loader);
         }
+
+        loader(function() {
+            spem.start(true);
+        });
 
         return spem;
     };
