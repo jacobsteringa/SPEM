@@ -62,23 +62,24 @@
             $output.appendChild($progress);
         }
 
-        var updateStrengthMeter = function(result) {
-            if ($output) {
-                $progressBar.style.width = '' + result.score * 25 + '%';
-                $progressBar.className = getProgressBarClass(formatting, result.score);
+        var updateStrengthMeter = function(flags, result) {
+            $progressBar.style.width = '' + result.score * 25 + '%';
+            $progressBar.className = getProgressBarClass(formatting, result.score);
 
-                if (options.scoreMessages && formatting !== 'materialize') {
-                    $progressBar.innerHTML = options.scoreMessages[result.score];
-                }
+            if (options.scoreMessages && formatting !== 'materialize') {
+                $progressBar.innerHTML = options.scoreMessages[result.score];
             }
-
-            if (options.onUpdate) options.onUpdate(result);
         };
 
         var onChange = function() {
             var result = zxcvbn(this.value, userData);
+            var flags  = getFlags(result);
 
-            updateStrengthMeter(result);
+            if ($output) {
+                updateStrengthMeter($output, result);
+            }
+
+            if (options.onUpdate) options.onUpdate(flags, result);
         };
 
         var started    = false;
@@ -104,10 +105,13 @@
                 $input.addEventListener('change', onChange);
 
                 var result = zxcvbn($input.value, userData);
+                var flags  = getFlags(result);
 
-                updateStrengthMeter(result);
+                if ($output) {
+                    updateStrengthMeter(flags, result);
+                }
 
-                if (options.onStart) options.onStart(result);
+                if (options.onStart) options.onStart(flags, result);
 
                 started = true;
 
@@ -177,6 +181,25 @@
 
             return prev;
         }, []);
+    };
+
+    var getFlags = function(zxcvbnData) {
+        var userInputs = zxcvbnData.sequence.filter(function(step) {
+            return step.pattern === 'dictionary' && step.dictionary_name === 'user_inputs';
+        });
+
+        var popularPasswords = zxcvbnData.sequence.filter(function(step) {
+            return step.pattern === 'dictionary' && step.dictionary_name === 'passwords';
+        });
+
+        return {
+            emptyPassword: !zxcvbnData.password.length,
+            userInput: !!userInputs.length,
+            userInputMatches: userInputs.map(function(step) {
+                return step.token;
+            }),
+            popularPassword: !!popularPasswords.length,
+        };
     };
 
     var createProgressBar = function(formatting, minWidth) {
