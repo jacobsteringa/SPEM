@@ -1,18 +1,20 @@
 (function (root, factory) {
     if (typeof module === 'object' && module.exports) {
-        module.exports = factory(function(cb) {
+        var zxcvbnLoader = function(cb) {
             require.ensure(['zxcvbn'], function(require) {
                 window.zxcvbn = require('zxcvbn');
 
                 cb();
             });
-        });
+        };
+
+        module.exports = factory(require('underscore'), zxcvbnLoader);
     } else if (typeof define === 'function' && define.amd) {
-        define([], factory);
+        define(['underscore'], factory);
     } else {
-        root.Spem = factory();
+        root.Spem = factory(root._);
     }
-}(this, function (nodeLoader) {
+}(this, function (_, nodeLoader) {
 
     var Spem = function(options, loader, onUpdate) {
         var oldOptions = options;
@@ -79,6 +81,7 @@
             updateStrengthMeter(result);
         };
 
+        var started    = false;
         var isDeferred = false;
 
         return {
@@ -87,8 +90,14 @@
             },
 
             start: function(deferred) {
-                if (isDeferred !== !!deferred) {
+                deferred = !!deferred;
+
+                if (started || isDeferred !== deferred) {
                     return false;
+                }
+
+                if (options.debounce) {
+                    onChange = _.debounce(onChange, options.debounce);
                 }
 
                 $input.addEventListener('keyup', onChange);
@@ -100,10 +109,13 @@
 
                 if (options.onStart) options.onStart(result);
 
+                started = true;
+
                 return this;
             },
 
             stop: function() {
+                started    = false;
                 isDeferred = false;
             },
 
