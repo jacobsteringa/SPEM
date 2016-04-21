@@ -76,7 +76,7 @@
             var flags  = getFlags(result);
 
             if ($output) {
-                updateStrengthMeter($output, result);
+                updateStrengthMeter(flags, result);
             }
 
             if (options.onUpdate) options.onUpdate(flags, result);
@@ -127,8 +127,9 @@
                 userData = getUserData(data);
 
                 var result = zxcvbn($input.value, userData);
+                var flags  = getFlags(result);
 
-                updateStrengthMeter(result);
+                updateStrengthMeter(flags, result);
             }
         };
     };
