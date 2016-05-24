@@ -126,6 +126,10 @@
             updateUserData: function(data) {
                 userData = getUserData(data);
 
+                if (started === false) {
+                    return;
+                }
+
                 var result = zxcvbn($input.value, userData);
                 var flags  = getFlags(result);
 
